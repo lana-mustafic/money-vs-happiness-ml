@@ -1,5 +1,6 @@
 """Exploratory Data Analysis for World Happiness Report 2023."""
 
+import logging
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -15,6 +16,8 @@ from data_loader import (
     get_full_dataframe,
 )
 
+logger = logging.getLogger(__name__)
+
 PLOTS_DIR = PROJECT_ROOT / "results" / "plots"
 
 
@@ -27,17 +30,24 @@ def ensure_plots_dir(path: Path | None = None) -> Path:
 def basic_statistics(df: pd.DataFrame) -> pd.DataFrame:
     """Print and return descriptive statistics for numeric columns."""
     stats = df.describe()
-    print("=" * 60)
-    print("BASIC STATISTICS")
-    print("=" * 60)
-    print(stats.to_string())
-    print()
-    print(f"Shape: {df.shape[0]} countries × {df.shape[1]} columns")
-    print(f"Missing values:\n{df.isna().sum()[df.isna().sum() > 0]}")
+    logger.info("=" * 60)
+    logger.info("BASIC STATISTICS")
+    logger.info("=" * 60)
+    logger.info("\n%s", stats.to_string())
+    logger.info("Shape: %d countries × %d columns", df.shape[0], df.shape[1])
+    missing = df.isna().sum()
+    missing = missing[missing > 0]
+    if len(missing):
+        logger.info("Missing values:\n%s", missing.to_string())
+    else:
+        logger.info("Missing values: none")
     return stats
 
 
-def plot_happiness_distribution(df: pd.DataFrame, save_dir: Path | None = None) -> Path:
+def plot_happiness_distribution(
+    df: pd.DataFrame,
+    save_dir: Path | None = None,
+) -> Path:
     """Histogram + KDE of Happiness score."""
     save_dir = ensure_plots_dir(save_dir)
     fig, ax = plt.subplots(figsize=(9, 5))
@@ -52,11 +62,14 @@ def plot_happiness_distribution(df: pd.DataFrame, save_dir: Path | None = None) 
     out = save_dir / "happiness_distribution.png"
     fig.savefig(out, dpi=150)
     plt.close(fig)
-    print(f"Saved: {out}")
+    logger.info("Saved: %s", out)
     return out
 
 
-def plot_correlation_heatmap(df: pd.DataFrame, save_dir: Path | None = None) -> Path:
+def plot_correlation_heatmap(
+    df: pd.DataFrame,
+    save_dir: Path | None = None,
+) -> Path:
     """Correlation matrix among features and target."""
     save_dir = ensure_plots_dir(save_dir)
     cols = [TARGET_COLUMN] + FEATURE_COLUMNS
@@ -78,18 +91,19 @@ def plot_correlation_heatmap(df: pd.DataFrame, save_dir: Path | None = None) -> 
     out = save_dir / "correlation_heatmap.png"
     fig.savefig(out, dpi=150)
     plt.close(fig)
-    print(f"Saved: {out}")
-    print("\nCorrelations with Happiness score:")
-    print(corr[TARGET_COLUMN].sort_values(ascending=False).to_string())
+    logger.info("Saved: %s", out)
+    logger.info("\nCorrelations with Happiness score:\n%s", corr[TARGET_COLUMN].sort_values(ascending=False).to_string())
     return out
 
 
-def plot_gdp_vs_happiness(df: pd.DataFrame, save_dir: Path | None = None) -> Path:
+def plot_gdp_vs_happiness(
+    df: pd.DataFrame,
+    save_dir: Path | None = None,
+) -> Path:
     """
     Key Easterlin visualization: Logged GDP vs Happiness score.
 
-    Linear OLS line + LOWESS-style quadratic fit to check for flattening
-    among the richest countries.
+    Linear OLS line + quadratic fit to check for flattening among rich countries.
     """
     save_dir = ensure_plots_dir(save_dir)
     x_col = "Logged GDP per capita"
@@ -102,7 +116,6 @@ def plot_gdp_vs_happiness(df: pd.DataFrame, save_dir: Path | None = None) -> Pat
     x_line = np.linspace(x.min(), x.max(), 200).reshape(-1, 1)
     y_lin = lin.predict(x_line)
 
-    # Quadratic fit to reveal potential diminishing returns
     x_flat = x.ravel()
     coeffs = np.polyfit(x_flat, y, deg=2)
     y_quad = np.polyval(coeffs, x_line.ravel())
@@ -110,7 +123,6 @@ def plot_gdp_vs_happiness(df: pd.DataFrame, save_dir: Path | None = None) -> Pat
     fig, ax = plt.subplots(figsize=(10, 6))
     ax.scatter(x_flat, y, alpha=0.65, c="#457b9d", edgecolors="white", linewidths=0.4, s=55)
 
-    # Annotate a few extremes for context
     top = df.nlargest(3, y_col)
     rich = df.nlargest(3, x_col)
     for _, row in pd.concat([top, rich]).drop_duplicates().iterrows():
@@ -134,15 +146,20 @@ def plot_gdp_vs_happiness(df: pd.DataFrame, save_dir: Path | None = None) -> Pat
     out = save_dir / "gdp_vs_happiness.png"
     fig.savefig(out, dpi=150)
     plt.close(fig)
-    print(f"Saved: {out}")
-    print(f"Linear R² (GDP alone): {lin.score(x, y):.3f}")
-    print("Quadratic curvature (a>0 convex, a<0 diminishing returns): "
-          f"a={coeffs[0]:.4f}")
+    logger.info("Saved: %s", out)
+    logger.info("Linear R² (GDP alone): %.3f", lin.score(x, y))
+    logger.info(
+        "Quadratic curvature (a>0 convex, a<0 diminishing returns): a=%.4f",
+        coeffs[0],
+    )
     return out
 
 
-def plot_feature_boxplots(df: pd.DataFrame, save_dir: Path | None = None) -> Path:
-    """Boxplots of standardized feature distributions."""
+def plot_feature_boxplots(
+    df: pd.DataFrame,
+    save_dir: Path | None = None,
+) -> Path:
+    """Boxplots of feature distributions."""
     save_dir = ensure_plots_dir(save_dir)
     melted = df[FEATURE_COLUMNS].melt(var_name="Feature", value_name="Value")
     fig, ax = plt.subplots(figsize=(11, 5))
@@ -153,17 +170,20 @@ def plot_feature_boxplots(df: pd.DataFrame, save_dir: Path | None = None) -> Pat
     out = save_dir / "feature_boxplots.png"
     fig.savefig(out, dpi=150)
     plt.close(fig)
-    print(f"Saved: {out}")
+    logger.info("Saved: %s", out)
     return out
 
 
-def run_eda(df: pd.DataFrame | None = None, save_dir: Path | None = None) -> dict:
+def run_eda(
+    df: pd.DataFrame | None = None,
+    save_dir: Path | None = None,
+) -> dict[str, pd.DataFrame | dict[str, Path]]:
     """Run the full EDA pipeline and save all plots."""
     if df is None:
         df = get_full_dataframe()
     save_dir = ensure_plots_dir(save_dir)
 
-    print("\n>>> Running Exploratory Data Analysis...\n")
+    logger.info(">>> Running Exploratory Data Analysis...")
     stats = basic_statistics(df)
     paths = {
         "distribution": plot_happiness_distribution(df, save_dir),
@@ -171,9 +191,12 @@ def run_eda(df: pd.DataFrame | None = None, save_dir: Path | None = None) -> dic
         "gdp_vs_happiness": plot_gdp_vs_happiness(df, save_dir),
         "boxplots": plot_feature_boxplots(df, save_dir),
     }
-    print("\nEDA complete.")
+    logger.info("EDA complete.")
     return {"stats": stats, "plots": paths}
 
 
 if __name__ == "__main__":
+    from logging_config import setup_logging
+
+    setup_logging()
     run_eda()

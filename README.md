@@ -21,7 +21,7 @@ Istraživanje odnosa bogatstva i sreće kroz mašinsko učenje na podacima **Wor
 | Cilj | `Happiness score` |
 | Features | `Logged GDP per capita`, `Social support`, `Healthy life expectancy`, `Freedom to make life choices`, `Generosity`, `Perceptions of corruption` |
 
-Nedostajuće vrijednosti (npr. jedna u `Healthy life expectancy`) popunjavaju se srednjom vrijednošću kolone.
+Nedostajuće vrijednosti (npr. jedna u `Healthy life expectancy`) popunjavaju se srednjom vrijednošću kolone — u EDA/dashboard putu. Za modelovanje, imputacija ide kroz `sklearn` Pipeline fitovan **samo na train skupu** (bez data leakage).
 
 ## Struktura projekta
 
@@ -32,26 +32,32 @@ money-vs-happiness-ml/
 ├── notebooks/
 │   └── analysis.ipynb
 ├── src/
-│   ├── data_loader.py
-│   ├── eda.py
-│   └── model.py
+│   ├── data_loader.py      # učitavanje i priprema podataka
+│   ├── eda.py              # eksploratorna analiza
+│   ├── model.py            # treniranje, CV, klasteri
+│   └── logging_config.py   # centralni logging
+├── tests/
+│   ├── test_data_loader.py
+│   └── test_model.py
 ├── results/
 │   ├── model_metrics.csv
 │   └── plots/
+├── dashboard.py            # Streamlit interaktivni dashboard
+├── run_pipeline.py         # glavni entry point
+├── main.py                 # alias za run_pipeline
+├── results_summary.md      # sažetak nalaza
+├── LICENSE                 # MIT
 ├── README.md
 └── requirements.txt
 ```
 
 ## Metodologija
 
-1. **Priprema** (`data_loader.py`) — učitavanje CSV-a, imputacija, odabir feature/target kolona.
+1. **Priprema** (`data_loader.py`) — učitavanje CSV-a, odabir feature/target kolona. Imputacija odvojena za EDA (cijeli skup) i ML (Pipeline na train).
 2. **EDA** (`eda.py`) — deskriptivna statistika, distribucija sreće, korelaciona matrica, scatter GDP vs Happiness (linear + kvadratni fit).
-3. **Modelovanje** (`model.py`) — 80/20 train–test split; modeli:
-   - Linear Regression (baseline)
-   - Random Forest Regressor
-   - XGBoost Regressor
-4. **Evaluacija** — R², MAE, RMSE na testnom skupu.
-5. **Interpretacija** — feature importance (RF / XGBoost) + opcioni K-Means klasteri zemalja.
+3. **Modelovanje** (`model.py`) — `sklearn.Pipeline` sa `SimpleImputer` + regressor; 5-fold cross-validation; 80/20 holdout test; GridSearch za RF/XGBoost.
+4. **Evaluacija** — R², MAE, RMSE (CV mean ± std + test set).
+5. **Interpretacija** — feature importance (RF / XGBoost) + K-Means klasteri sa elbow/silhouette analizom.
 
 ## Instalacija i pokretanje
 
@@ -70,32 +76,37 @@ Pokreni cijeli pipeline iz korijena projekta:
 ```bash
 python run_pipeline.py
 # ili:
-cd src
-python data_loader.py
-python eda.py
-python model.py
+python main.py
 ```
 
-Ili otvori interaktivnu analizu:
+Pokreni testove:
+
+```bash
+pytest tests/ -v
+```
+
+Interaktivna analiza:
 
 ```bash
 jupyter notebook notebooks/analysis.ipynb
 ```
 
-Interaktivni Streamlit dashboard:
+Streamlit dashboard:
 
 ```bash
 streamlit run dashboard.py
 ```
 
-Sažetak nalaza za GitHub: [`results_summary.md`](results_summary.md)
+Sažetak nalaza: [`results_summary.md`](results_summary.md)
 
 ## Rezultati
 
 Nakon pokretanja, rezultati se nalaze u:
 
-- `results/model_metrics.csv` — uporedba modela
-- `results/plots/` — svi grafikoni (distribucija, heatmap, GDP–sreća, feature importance, klasteri, …)
+- `results/model_metrics.csv` — CV i test metrike po modelu
+- `results/plots/` — grafikoni (distribucija, heatmap, GDP–sreća, model comparison, feature importance, K-Means elbow, klasteri)
+
+Pokreni `python run_pipeline.py` da regenerišeš metrike i grafikone.
 
 ### Korelacije sa Happiness score (WHR 2023)
 
@@ -110,31 +121,29 @@ Nakon pokretanja, rezultati se nalaze u:
 
 GDP samostalno objašnjava ≈61% varijanse sreće (R² ≈ 0.615).
 
-### Performanse modela (test set, 20%)
-
-| Model | R2 | MAE | RMSE |
-|-------|-----|-----|------|
-| Linear Regression | **0.780** | **0.406** | **0.551** |
-| Random Forest | 0.729 | 0.424 | 0.612 |
-| XGBoost | 0.686 | 0.466 | 0.659 |
-
-Na ovom (malom) cross-section skupu linearna regresija je najbolja; XGBoost ne nadmašuje jednostavnije modele — koristan nalaz za analizu overfittinga / kompleksnosti.
-
 ### Feature importance (Random Forest / XGBoost)
 
 Najvažnije karakteristike: **Social support**, zatim **Logged GDP per capita**, potom **Healthy life expectancy**.
 
 ### Easterlin paradox
 
-Scatter GDP–Happiness pokazuje jaku pozitivnu vezu. Kvadratni fit na ovom *cross-section* uzorku ne pokazuje jasno “spljoštavanje” kod najbogatijih — paradox je historijski više o *unutar-zemaljskom* vremenskom trendu nego o međunarodnom poređenju. Ipak, sreća nije samo funkcija GDP-a: socijalna podrška ima i veću korelaciju i veću feature importance.
+Scatter GDP–Happiness pokazuje jaku pozitivnu vezu. Kvadratni fit na ovom *cross-section* uzorku ne pokazuje jasno “spljoštavanje” kod najbogatijih — paradox je historijski više o *unutar-zemaljskom* vremenskom trendu nego o međunarodnom poređenju.
 
-### K-Means (3 klastera)
+## Ograničenja
 
-Zemlje se prirodno grupišu u profile niže / srednje / više sreće (prosjeci ≈ 4.3 / 5.8 / 7.0), u skladu sa socio-ekonomskim faktorima.
+- **Mali uzorak** (~137 zemalja) — visoka varijansa metrika; CV mean ± std je pouzdaniji od jednog split-a.
+- **Cross-section, ne time series** — ne testira Easterlin paradox u pravom smislu (unutar-zemaljski trend kroz decenije).
+- **Generosity** ima skoro nultu korelaciju (≈0.04) — marginalan prediktor u ovom skupu.
+- **K-Means** je unsupervised EDA alat; broj klastera bira se elbow/silhouette analizom.
+- WHR kolone tipa *Explained by: …* nisu korištene kao features (izbjegava se circular reasoning).
 
 ## Zaključak
 
-Bogatstvo je važan, ali ne i jedini prediktor nacionalne sreće. **Socijalna podrška** je najjači signal u ovom modelu, ispred GDP-a. Linearna veza GDP–sreća i dalje drži na međunarodnom nivou 2023., dok Easterlin paradox ostaje relevantan kao hipoteza o *dugoročnom* rastu unutar bogatih društava, a ne kao jednostavno “bogate zemlje nisu sretne”.
+Bogatstvo je važan, ali ne i jedini prediktor nacionalne sreće. **Socijalna podrška** je najjači signal u ovom modelu, ispred GDP-a. Linearna regresija često nadmašuje složenije modele na malom cross-section skupu — koristan nalaz o overfittingu.
+
+## Licenca
+
+MIT — vidi [`LICENSE`](LICENSE).
 
 ## Reference
 

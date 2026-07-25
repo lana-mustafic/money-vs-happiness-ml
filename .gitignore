@@ -9,6 +9,11 @@ __pycache__/
 venv/
 .env
 
+# IDE / caches
+.idea/
+.vscode/
+*.egg-info/
+
 # Large datasets
 data/raw/*.csv
 

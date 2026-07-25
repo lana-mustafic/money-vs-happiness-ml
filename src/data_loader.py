@@ -29,7 +29,7 @@ def load_raw_data(path: Path | str | None = None) -> pd.DataFrame:
     return pd.read_csv(data_path)
 
 
-def handle_missing_values(df: pd.DataFrame) -> pd.DataFrame:
+def handle_missing_values(df: pd.DataFrame, verbose: bool = True) -> pd.DataFrame:
     """Fill missing numeric values with column means (e.g. Healthy life expectancy)."""
     df = df.copy()
     numeric_cols = df.select_dtypes(include="number").columns
@@ -37,7 +37,8 @@ def handle_missing_values(df: pd.DataFrame) -> pd.DataFrame:
         if df[col].isna().any():
             mean_val = df[col].mean()
             n_missing = int(df[col].isna().sum())
-            print(f"Filling {n_missing} missing value(s) in '{col}' with mean={mean_val:.3f}")
+            if verbose:
+                print(f"Filling {n_missing} missing value(s) in '{col}' with mean={mean_val:.3f}")
             df[col] = df[col].fillna(mean_val)
     return df
 
@@ -74,17 +75,25 @@ def prepare_features(
     return X, y, meta
 
 
-def load_and_prepare(path: Path | str | None = None) -> tuple[pd.DataFrame, pd.Series, pd.DataFrame]:
+def load_and_prepare(
+    path: Path | str | None = None,
+    verbose: bool = True,
+) -> tuple[pd.DataFrame, pd.Series, pd.DataFrame]:
     """Full pipeline: load CSV → impute missing → return X, y, meta."""
     df = load_raw_data(path)
-    df = handle_missing_values(df)
+    df = handle_missing_values(df, verbose=verbose)
     return prepare_features(df)
 
 
-def get_full_dataframe(path: Path | str | None = None) -> pd.DataFrame:
+def get_full_dataframe(path: Path | str | None = None, verbose: bool = True) -> pd.DataFrame:
     """Return the cleaned dataframe with features, target, and metadata."""
-    X, y, meta = load_and_prepare(path)
+    X, y, meta = load_and_prepare(path, verbose=verbose)
     return pd.concat([meta, y.rename(TARGET_COLUMN), X], axis=1)
+
+
+def load_data(path: Path | str | None = None) -> pd.DataFrame:
+    """Convenience loader for dashboards / notebooks (quiet by default)."""
+    return get_full_dataframe(path, verbose=False)
 
 
 if __name__ == "__main__":

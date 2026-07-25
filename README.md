@@ -82,6 +82,14 @@ Ili otvori interaktivnu analizu:
 jupyter notebook notebooks/analysis.ipynb
 ```
 
+Interaktivni Streamlit dashboard:
+
+```bash
+streamlit run dashboard.py
+```
+
+Sažetak nalaza za GitHub: [`results_summary.md`](results_summary.md)
+
 ## Rezultati
 
 Nakon pokretanja, rezultati se nalaze u:

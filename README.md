@@ -1,4 +1,4 @@
-# Money vs Happiness — Easterlin Paradox (ML)
+# Money vs Happiness - Easterlin Paradox (ML)
 
 Istraživanje odnosa bogatstva i sreće kroz mašinsko učenje na podacima **World Happiness Report 2023**.
 

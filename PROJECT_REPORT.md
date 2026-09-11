@@ -496,6 +496,55 @@ Funkcija `basic_statistics()` poziva `df.describe()` i logira oblik skupa (137 z
 
 **Figure 2 – Korelaciona matrica happiness i socio-ekonomskih faktora**
 
+### 10.3.1 Korelacije među 6 prediktora (provjera redundantnosti)
+
+Cilj ove provjere nije predikcija sreće, nego odgovor na pitanje: **jesu li neki od 6 socio-ekonomskih faktora međusobno toliko slični da jedan treba izbaciti?**
+
+**Grafikon:** `results/plots/predictor_correlation_heatmap.png`
+
+**Tabele:** `results/predictor_correlations.csv`, `results/predictor_vif.csv`
+
+**Metoda:** Pearson korelacija samo među `FEATURE_COLUMNS` (cilj isključen). Parovi sa **|r| ≥ 0.80** tretiraju se kao kandidati za redundantnost. Dodatno se računa **VIF** (Variance Inflation Factor): VIF_i = 1 / (1 − R²_i), gdje se faktor i regresira na preostalih 5. Uobičajeni prag za izbacivanje je **VIF > 10**.
+
+**Svi parovi prediktora (sortirano po |r|):**
+
+
+| Faktor 1                     | Faktor 2                     | Pearson r | \|r\| ≥ 0.80 |
+| ---------------------------- | ---------------------------- | --------- | ------------ |
+| Logged GDP per capita        | Healthy life expectancy      | **0.836** | da           |
+| Logged GDP per capita        | Social support               | 0.738     | ne           |
+| Social support               | Healthy life expectancy      | 0.725     | ne           |
+| Social support               | Freedom to make life choices | 0.542     | ne           |
+| Logged GDP per capita        | Freedom to make life choices | 0.451     | ne           |
+| Logged GDP per capita        | Perceptions of corruption    | −0.437    | ne           |
+| Healthy life expectancy      | Freedom to make life choices | 0.414     | ne           |
+| Healthy life expectancy      | Perceptions of corruption    | −0.404    | ne           |
+| Freedom to make life choices | Perceptions of corruption    | −0.384    | ne           |
+| Social support               | Perceptions of corruption    | −0.272    | ne           |
+| Freedom to make life choices | Generosity                   | 0.170     | ne           |
+| Logged GDP per capita        | Generosity                   | −0.156    | ne           |
+| Healthy life expectancy      | Generosity                   | −0.134    | ne           |
+| Generosity                   | Perceptions of corruption    | −0.123    | ne           |
+| Social support               | Generosity                   | 0.037     | ne           |
+
+
+**VIF:**
+
+
+| Faktor                       | VIF   | Interpretacija      |
+| ---------------------------- | ----- | ------------------- |
+| Logged GDP per capita        | 4.20  | umjereno, ispod 5   |
+| Healthy life expectancy      | 3.73  | nisko–umjereno      |
+| Social support               | 2.95  | nisko               |
+| Freedom to make life choices | 1.59  | nisko               |
+| Perceptions of corruption    | 1.43  | nisko               |
+| Generosity                   | 1.19  | nisko               |
+
+
+**Odluka: nijedna kolona nije izbačena.** Jedini par iznad praga je GDP ↔ Healthy life expectancy (r = 0.836). Oni statistički dijele sličnu informaciju (bogatije zemlje imaju duži zdrav život), ali mjere **različite koncepte**. VIF je svugdje **ispod 5**, daleko od praga 10. Stabla (RF, XGBoost) nisu osjetljiva na ovu vrstu korelacije kao linearna regresija. U LR se ipak vidi trag multikolinearnosti: Healthy life expectancy ima r = 0.746 sa srećom, ali koeficijent samo +0.020 — dio efekta preuzima GDP. To je razlog da se par zabilježi, ne da se kolona obriše.
+
+**Figure 2b – Pearson matrica među 6 socio-ekonomskih prediktora**
+
 ### 10.4 Boxplotovi karakteristika
 
 **Grafikon:** `results/plots/feature_boxplots.png`
@@ -582,6 +631,7 @@ Projekat koristi **minimalan** feature engineering:
 | Transformacija            | Opis                                                    | Razlog                                                               |
 | ------------------------- | ------------------------------------------------------- | -------------------------------------------------------------------- |
 | Odabir 6 WHR kolona       | Ručni feature selection u `FEATURE_COLUMNS`             | WHR već pruža standardizovane objašnjavajuće faktore                 |
+| Provjera redundantnosti   | Pearson parovi među 6 faktora + VIF (`eda.py`)          | Jedini par \|r\| ≥ 0.8 je GDP–HLE (0.836); VIF < 5; **nijedna kolona nije izbačena** |
 | Log GDP već transformisan | `Logged GDP per capita` dolazi log-transformisan iz WHR | WHR koristi log GDP u svojoj metodologiji                            |
 | StandardScaler            | Primijenjen **samo** u K-Means klasterovanju            | K-Means je osjetljiv na različite skale                              |
 | SimpleImputer (mean)      | U ML Pipeline-u                                         | Rješava 1 missing u Healthy life expectancy bez ručnog brisanja reda |
@@ -592,7 +642,7 @@ Projekat koristi **minimalan** feature engineering:
 - Normalizacija/standardizacija za regresione modele
 - One-hot encoding kategorijalnih varijabli (regioni nisu uključeni u model)
 - Ručno kreirani ratio indikatori
-- PCA ili feature selection algoritmi
+- PCA ili automatski feature selection algoritmi (ručna provjera redundantnosti putem Pearson |r| i VIF **jeste** urađena; nijedna kolona nije izbačena)
 - SHAP, permutation importance
 
 ### 11.3 Data leakage i skaliranje
@@ -1059,6 +1109,7 @@ Dashboard **NE integriše** trenirane ML modele za predikciju. Prikazuje **stvar
 4. **Scatter plot:** GDP vs Happiness, boja = Social support; odabrana zemlja označena zvijedom.
 5. **Tabele:** Top 10 i Bottom 10 zemalja po sreći.
 6. **Bar chart:** Pearson korelacije faktora sa happiness score-om.
+7. **Heatmap + tabela:** Pearson korelacije među 6 prediktora (provjera da li izbaciti kolonu).
 
 ### 24.5 Pokretanje
 
@@ -1086,9 +1137,12 @@ money-vs-happiness-ml/
 │   └── analysis.ipynb           # interaktivna analiza
 ├── tests/
 │   ├── test_data_loader.py
+│   ├── test_eda.py
 │   └── test_model.py
 ├── results/
 │   ├── model_metrics.csv
+│   ├── predictor_correlations.csv
+│   ├── predictor_vif.csv
 │   └── plots/                   # generisani grafikoni
 ├── dashboard.py                 # Streamlit app
 ├── run_pipeline.py              # glavni entry point
@@ -1110,6 +1164,9 @@ money-vs-happiness-ml/
 [data_loader.py] ──► load_raw_data() / load_for_modeling() / load_data()
       │
       ├──► [eda.py] ──► statistike + PNG grafikoni
+      │                      │
+      │                      ├──► predictor_correlations.csv, predictor_vif.csv
+      │                      └──► correlation / predictor heatmaps
       │
       ├──► [model.py] ──► Pipeline → CV → GridSearch → test evaluacija
       │                      │
@@ -1127,7 +1184,7 @@ money-vs-happiness-ml/
 | Modul               | Uloga                                               |
 | ------------------- | --------------------------------------------------- |
 | `data_loader.py`    | Učitavanje CSV, odabir kolona, imputacija (EDA put) |
-| `eda.py`            | Statistike, korelacije, scatter, boxplotovi         |
+| `eda.py`            | Statistike, korelacije, redundantnost prediktora, scatter, boxplotovi |
 | `model.py`          | Treniranje, evaluacija, feature importance, K-Means |
 | `logging_config.py` | Strukturirani log output                            |
 | `run_pipeline.py`   | Orkestracija EDA + ML                               |
@@ -1182,6 +1239,7 @@ jupyter notebook notebooks/analysis.ipynb
 | Test fajl             | Šta provjerava                                           |
 | --------------------- | -------------------------------------------------------- |
 | `test_data_loader.py` | Učitavanje, kolone, imputacija, rename Ladder score      |
+| `test_eda.py`         | Parovi prediktora, prag \|r\| ≥ 0.8, odluka da se ne izbacuje kolona |
 | `test_model.py`       | Pipeline struktura, CV, train/evaluate, imputer na train |
 
 
@@ -1199,6 +1257,7 @@ jupyter notebook notebooks/analysis.ipynb
 8. **Nema perzistentno sačuvanih modela** — reprodukcija zahtijeva ponovno treniranje.
 9. **Dashboard bez ML predikcija** — samo EDA prikaz.
 10. **Korelacija ≠ kauzalnost** — fundamentalno metodološko ograničenje.
+11. **Multikolinearnost GDP–HLE** (r = 0.836) — zabilježena, ali kolona nije izbačena; može smanjiti stabilnost LR koeficijenata za Healthy life expectancy.
 
 ---
 
@@ -1323,9 +1382,10 @@ Projekat pokazuje da mašinsko učenje može kvantitativno opisati odnos bogatst
 
 | Figura   | Fajl                         | Opis                                         |
 | -------- | ---------------------------- | -------------------------------------------- |
-| Figure 1 | `happiness_distribution.png` | Distribucija Happiness score                 |
-| Figure 2 | `correlation_heatmap.png`    | Pearson korelaciona matrica                  |
-| Figure 3 | `feature_boxplots.png`       | Boxplotovi karakteristika                    |
+| Figure 1 | `happiness_distribution.png`         | Distribucija Happiness score                          |
+| Figure 2 | `correlation_heatmap.png`            | Pearson korelaciona matrica (cilj + 6 faktora)        |
+| Figure 2b | `predictor_correlation_heatmap.png` | Pearson matrica među 6 prediktora (redundantnost)    |
+| Figure 3 | `feature_boxplots.png`               | Boxplotovi karakteristika                             |
 | Figure 4 | `gdp_vs_happiness.png`       | GDP vs sreća sa linearnim i kvadratnim fitom |
 | Figure 5 | `model_comparison.png`       | Poređenje modela (CV metrike)                |
 | Figure 6 | `feature_importance.png`     | Važnost karakteristika (RF, XGBoost)         |
@@ -1369,6 +1429,10 @@ Vidi Sekcije 17.2 i 17.3.
 ### Tabela D — Feature importance (Random Forest)
 
 Vidi Sekciju 19.2.
+
+### Tabela E — Međusobne korelacije prediktora
+
+Vidi Sekciju 10.3.1. Jedini par sa |r| ≥ 0.80 je Logged GDP per capita ↔ Healthy life expectancy (r = 0.836). Nijedna kolona nije izbačena (svi VIF < 5).
 
 ---
 

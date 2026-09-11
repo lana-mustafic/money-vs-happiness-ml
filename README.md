@@ -38,9 +38,12 @@ money-vs-happiness-ml/
 │   └── logging_config.py   # centralni logging
 ├── tests/
 │   ├── test_data_loader.py
+│   ├── test_eda.py
 │   └── test_model.py
 ├── results/
 │   ├── model_metrics.csv
+│   ├── predictor_correlations.csv
+│   ├── predictor_vif.csv
 │   └── plots/
 ├── dashboard.py            # Streamlit interaktivni dashboard
 ├── run_pipeline.py         # glavni entry point
@@ -54,7 +57,7 @@ money-vs-happiness-ml/
 ## Metodologija
 
 1. **Priprema** (`data_loader.py`) — učitavanje CSV-a, odabir feature/target kolona. Imputacija odvojena za EDA (cijeli skup) i ML (Pipeline na train).
-2. **EDA** (`eda.py`) — deskriptivna statistika, distribucija sreće, korelaciona matrica, scatter GDP vs Happiness (linear + kvadratni fit).
+2. **EDA** (`eda.py`) — deskriptivna statistika, distribucija sreće, korelaciona matrica, **međusobne korelacije 6 faktora + VIF** (nijedna kolona nije izbačena), scatter GDP vs Happiness (linear + kvadratni fit).
 3. **Modelovanje** (`model.py`) — `sklearn.Pipeline` sa `SimpleImputer` + regressor; 5-fold cross-validation; 80/20 holdout test; GridSearch za RF/XGBoost.
 4. **Evaluacija** — R², MAE, RMSE (CV mean ± std + test set).
 5. **Interpretacija** — feature importance (RF / XGBoost) + K-Means klasteri sa elbow/silhouette analizom.
@@ -104,7 +107,9 @@ Sažetak nalaza: [`results_summary.md`](results_summary.md)
 Nakon pokretanja, rezultati se nalaze u:
 
 - `results/model_metrics.csv` — CV i test metrike po modelu
-- `results/plots/` — grafikoni (distribucija, heatmap, GDP–sreća, model comparison, feature importance, K-Means elbow, klasteri)
+- `results/predictor_correlations.csv` — međusobne Pearson korelacije 6 faktora
+- `results/predictor_vif.csv` — VIF (provjera da li izbaciti kolonu)
+- `results/plots/` — grafikoni (distribucija, heatmap, prediktori, GDP–sreća, model comparison, feature importance, K-Means elbow, klasteri)
 
 Pokreni `python run_pipeline.py` da regenerišeš metrike i grafikone.
 
@@ -120,6 +125,10 @@ Pokreni `python run_pipeline.py` da regenerišeš metrike i grafikone.
 | Generosity | 0.04 |
 
 GDP samostalno objašnjava ≈61% varijanse sreće (R² ≈ 0.615).
+
+### Međusobne korelacije 6 faktora (da li izbaciti kolonu?)
+
+Jedini par iznad |r| ≥ 0.80 je **Logged GDP per capita ↔ Healthy life expectancy** (r = 0.836). Ostali parovi su niži. VIF je svugdje ispod 5 (najviši: GDP 4.20). **Nijedna kolona nije izbačena** — faktori mjere različite koncepte, a stabla podnose ovu korelaciju.
 
 ### Feature importance (Random Forest / XGBoost)
 

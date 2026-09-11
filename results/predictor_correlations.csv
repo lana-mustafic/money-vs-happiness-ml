@@ -1,0 +1,16 @@
+Faktor 1,Faktor 2,Pearson r,|r|,Iznad praga 0.8
+Logged GDP per capita,Healthy life expectancy,0.8363864356481492,0.8363864356481492,True
+Logged GDP per capita,Social support,0.7380687685259557,0.7380687685259557,False
+Social support,Healthy life expectancy,0.7249457272226879,0.7249457272226879,False
+Social support,Freedom to make life choices,0.541630144270826,0.541630144270826,False
+Logged GDP per capita,Freedom to make life choices,0.451438933512564,0.451438933512564,False
+Logged GDP per capita,Perceptions of corruption,-0.4369608390401183,0.4369608390401183,False
+Healthy life expectancy,Freedom to make life choices,0.4140287424103763,0.4140287424103763,False
+Healthy life expectancy,Perceptions of corruption,-0.4038109989888059,0.4038109989888059,False
+Freedom to make life choices,Perceptions of corruption,-0.3837863047201425,0.3837863047201425,False
+Social support,Perceptions of corruption,-0.27249044870413236,0.27249044870413236,False
+Freedom to make life choices,Generosity,0.17022947436683497,0.17022947436683497,False
+Logged GDP per capita,Generosity,-0.15645555703389463,0.15645555703389463,False
+Healthy life expectancy,Generosity,-0.13444072744718022,0.13444072744718022,False
+Generosity,Perceptions of corruption,-0.12265326488553271,0.12265326488553271,False
+Social support,Generosity,0.036573757029518664,0.036573757029518664,False

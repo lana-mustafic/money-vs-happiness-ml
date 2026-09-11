@@ -111,8 +111,32 @@ def main() -> None:
     )
     st.plotly_chart(fig_corr, use_container_width=True)
 
+    st.subheader("Korelacije među 6 socio-ekonomskih faktora")
+    pred_corr = df[FEATURE_COLUMNS].corr()
+    fig_pred = px.imshow(
+        pred_corr,
+        text_auto=".2f",
+        color_continuous_scale="RdYlGn",
+        color_continuous_midpoint=0,
+        zmin=-1,
+        zmax=1,
+        title="Pearson matrica prediktora (provjera redundantnosti)",
+        aspect="auto",
+    )
+    st.plotly_chart(fig_pred, use_container_width=True)
+
+    pair_rows = []
+    for i, a in enumerate(FEATURE_COLUMNS):
+        for b in FEATURE_COLUMNS[i + 1 :]:
+            r = pred_corr.loc[a, b]
+            pair_rows.append({"Faktor 1": a, "Faktor 2": b, "Pearson r": r, "|r|": abs(r)})
+    pair_df = pd.DataFrame(pair_rows).sort_values("|r|", ascending=False)
+    st.dataframe(pair_df, hide_index=True, use_container_width=True)
+
     st.info(
         "Socijalna podrška i GDP su najjači korelati sreće. "
+        "Među prediktorima jedini par iznad |r| ≥ 0.8 je GDP ↔ Healthy life expectancy "
+        "(r ≈ 0.84). Nijedna kolona nije izbačena: mjere različite koncepte, a VIF ostaje < 10. "
         "Detaljniji ML rezultati: `results_summary.md` i `results/plots/`."
     )
 

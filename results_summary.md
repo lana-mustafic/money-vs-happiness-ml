@@ -44,6 +44,21 @@ Scatter plot `Logged GDP per capita` vs `Happiness score`:
 
 > Zaključak: više novca pomaže, ali **nije dovoljno** — institucije i društvene veze nose veliki dio priče.
 
+### 3b. Međusobne korelacije prediktora — nijedna kolona nije izbačena
+
+Pearson parovi među 6 faktora (`predictor_correlation_heatmap.png`, `predictor_correlations.csv`):
+
+| Par | r | Iznad 0.80? |
+|-----|---|-------------|
+| Logged GDP per capita ↔ Healthy life expectancy | **0.836** | da |
+| Logged GDP per capita ↔ Social support | 0.738 | ne |
+| Social support ↔ Healthy life expectancy | 0.725 | ne |
+| Ostali parovi | < 0.55 | ne |
+
+VIF (`predictor_vif.csv`): najviši je GDP **4.20**, zatim Healthy life expectancy **3.73** — sve **ispod 5**, daleko od praga 10.
+
+**Odluka:** zadržani svih 6 faktora. GDP i očekivano zdravo trajanje života dijele sličan statistički signal, ali mjere različite stvari.
+
 ### 4. Klaster Analiza (K-Means)
 
 Elbow + silhouette analiza (`kmeans_elbow.png`) preporučuje **k=2** (silhouette = 0.342):
@@ -70,13 +85,15 @@ Svi grafikoni su u `results/plots/`:
 
 - `happiness_distribution.png`
 - `correlation_heatmap.png`
+- `predictor_correlation_heatmap.png`
 - `gdp_vs_happiness.png`
 - `model_comparison.png`
 - `feature_importance.png`
 - `kmeans_elbow.png`
 - `kmeans_clusters.png`
 
-Metrike: `results/model_metrics.csv`
+Metrike: `results/model_metrics.csv`  
+Korelacije prediktora: `results/predictor_correlations.csv`, `results/predictor_vif.csv`
 
 ## Interaktivni Dashboard
 

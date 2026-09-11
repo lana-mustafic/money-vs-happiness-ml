@@ -14,7 +14,10 @@ from data_loader import load_for_modeling  # noqa: E402
 from model import (  # noqa: E402
     build_pipeline,
     cross_validate_model,
+    evaluate_holdout_split,
+    evaluate_split_ratios,
     get_estimator,
+    split_data,
     train_and_evaluate,
 )
 
@@ -63,6 +66,29 @@ def test_imputer_fits_on_train_only(xy: tuple[pd.DataFrame, pd.Series]) -> None:
     assert imputer.statistics_ is not None
     feature_idx = list(X.columns).index("Healthy life expectancy")
     assert imputer.statistics_[feature_idx] == pytest.approx(train_mean, rel=1e-3)
+
+
+def test_split_ratios_cover_expected_sizes(xy: tuple[pd.DataFrame, pd.Series]) -> None:
+    X, y = xy
+    df = evaluate_split_ratios(X, y, test_sizes=(0.2, 0.3))
+    assert set(df["Split"]) == {"80/20", "70/30"}
+    assert set(df["Model"]) == {"Linear Regression", "Random Forest", "XGBoost"}
+    n = len(X)
+    for _, row in df.iterrows():
+        assert row["n_train"] + row["n_test"] == n
+    r2_80 = df.loc[(df["Split"] == "80/20") & (df["Model"] == "Linear Regression"), "Test_R2"].iloc[0]
+    assert r2_80 > 0.5
+
+
+def test_split_seeds_change_holdout_assignment(xy: tuple[pd.DataFrame, pd.Series]) -> None:
+    X, y = xy
+    _, test_a, _, _ = split_data(X, y, test_size=0.2, random_state=0)
+    _, test_b, _, _ = split_data(X, y, test_size=0.2, random_state=42)
+    assert not test_a.index.equals(test_b.index)
+    df = evaluate_holdout_split(X, y, test_size=0.2, random_state=42)
+    assert len(df) == 3
+    assert int(df["n_test"].iloc[0]) == len(test_b)
+    assert (df["Test_R2"] > 0).all()
 
 
 def test_get_estimator_from_pipeline(xy: tuple[pd.DataFrame, pd.Series]) -> None:

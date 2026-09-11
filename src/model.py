@@ -36,6 +36,9 @@ RANDOM_STATE = 42
 TEST_SIZE = 0.2
 CV_FOLDS = 5
 KMEANS_K_RANGE = range(2, 8)
+# Extra holdouts to check whether 80/20 is lucky or brittle.
+SPLIT_TEST_SIZES = (0.10, 0.20, 0.30, 0.40)
+SPLIT_SEEDS = (0, 7, 42, 123)
 
 SplitTuple = tuple[pd.DataFrame, pd.DataFrame, pd.Series, pd.Series]
 
@@ -245,6 +248,193 @@ def train_and_evaluate(
     logger.info("--- Ranked by CV R2 ---")
     logger.info("\n%s", metrics_df.to_string(index=False))
     return metrics_df, cv_df, fitted, (X_train, X_test, y_train, y_test)
+
+
+def _split_label(test_size: float) -> str:
+    train_pct = int(round((1.0 - test_size) * 100))
+    test_pct = int(round(test_size * 100))
+    return f"{train_pct}/{test_pct}"
+
+
+def evaluate_holdout_split(
+    X: pd.DataFrame,
+    y: pd.Series,
+    test_size: float,
+    random_state: int = RANDOM_STATE,
+) -> pd.DataFrame:
+    """
+    Train the three base models on one holdout split (no GridSearch).
+
+    Fixed hyperparameters keep the comparison about the split, not tuning luck.
+    """
+    X_train, X_test, y_train, y_test = split_data(
+        X, y, test_size=test_size, random_state=random_state
+    )
+    rows: list[dict[str, Any]] = []
+    for name, estimator in build_base_estimators().items():
+        model = build_pipeline(estimator)
+        model.fit(X_train, y_train)
+        scores = evaluate_model(model, X_test, y_test)
+        rows.append(
+            {
+                "Split": _split_label(test_size),
+                "Train %": int(round((1.0 - test_size) * 100)),
+                "Test %": int(round(test_size * 100)),
+                "test_size": test_size,
+                "random_state": random_state,
+                "n_train": len(X_train),
+                "n_test": len(X_test),
+                "Model": name,
+                "Test_R2": float(scores["R2"]),
+                "Test_MAE": float(scores["MAE"]),
+                "Test_RMSE": float(scores["RMSE"]),
+            }
+        )
+    return pd.DataFrame(rows)
+
+
+def evaluate_split_ratios(
+    X: pd.DataFrame | None = None,
+    y: pd.Series | None = None,
+    test_sizes: tuple[float, ...] = SPLIT_TEST_SIZES,
+    random_state: int = RANDOM_STATE,
+) -> pd.DataFrame:
+    """Compare holdout metrics across several train/test ratios."""
+    if X is None or y is None:
+        X, y, _ = load_for_modeling()
+    frames = [
+        evaluate_holdout_split(X, y, test_size=ts, random_state=random_state)
+        for ts in test_sizes
+    ]
+    return pd.concat(frames, ignore_index=True)
+
+
+def evaluate_split_seeds(
+    X: pd.DataFrame | None = None,
+    y: pd.Series | None = None,
+    seeds: tuple[int, ...] = SPLIT_SEEDS,
+    test_size: float = TEST_SIZE,
+) -> pd.DataFrame:
+    """Compare the same 80/20 ratio under different shuffles."""
+    if X is None or y is None:
+        X, y, _ = load_for_modeling()
+    frames = [
+        evaluate_holdout_split(X, y, test_size=test_size, random_state=seed)
+        for seed in seeds
+    ]
+    return pd.concat(frames, ignore_index=True)
+
+
+def plot_split_ratio_comparison(
+    ratio_df: pd.DataFrame,
+    save_dir: Path | None = None,
+) -> Path:
+    save_dir = save_dir or PLOTS_DIR
+    ensure_dirs()
+
+    fig, axes = plt.subplots(1, 2, figsize=(12, 4.5))
+    for ax, metric, title, ylabel in (
+        (axes[0], "Test_R2", "Test R² by train share", "Test R² (higher is better)"),
+        (axes[1], "Test_MAE", "Test MAE by train share", "Test MAE (lower is better)"),
+    ):
+        sns.lineplot(
+            data=ratio_df,
+            x="Train %",
+            y=metric,
+            hue="Model",
+            marker="o",
+            ax=ax,
+        )
+        ax.set_title(title)
+        ax.set_xlabel("Train share (%)  —  90/10, 80/20, 70/30, 60/40")
+        ax.set_ylabel(ylabel)
+        ax.grid(True, alpha=0.25)
+        ax.legend(fontsize=8)
+        ax.invert_xaxis()
+    fig.suptitle("Does the holdout split change model quality?")
+    fig.tight_layout()
+    out = save_dir / "split_ratio_comparison.png"
+    fig.savefig(out, dpi=150)
+    plt.close(fig)
+    logger.info("Saved: %s", out)
+    return out
+
+
+def plot_split_seed_comparison(
+    seed_df: pd.DataFrame,
+    save_dir: Path | None = None,
+) -> Path:
+    save_dir = save_dir or PLOTS_DIR
+    ensure_dirs()
+
+    fig, ax = plt.subplots(figsize=(9, 4.5))
+    sns.barplot(
+        data=seed_df,
+        x="random_state",
+        y="Test_R2",
+        hue="Model",
+        ax=ax,
+    )
+    ax.set_title("Same 80/20 split, different random shuffles")
+    ax.set_xlabel("random_state")
+    ax.set_ylabel("Test R²")
+    ax.grid(True, axis="y", alpha=0.25)
+    ax.legend(fontsize=8)
+    fig.tight_layout()
+    out = save_dir / "split_seed_comparison.png"
+    fig.savefig(out, dpi=150)
+    plt.close(fig)
+    logger.info("Saved: %s", out)
+    return out
+
+
+def run_split_sensitivity(
+    X: pd.DataFrame | None = None,
+    y: pd.Series | None = None,
+) -> dict[str, pd.DataFrame | Path]:
+    """
+    Train/test split robustness: several ratios and several 80/20 seeds.
+
+    Primary reported split remains 80/20 (random_state=42). This check answers
+    whether that one split was unusually lucky or unlucky.
+    """
+    if X is None or y is None:
+        X, y, _ = load_for_modeling()
+
+    logger.info("=" * 60)
+    logger.info("TRAIN/TEST SPLIT SENSITIVITY")
+    logger.info("=" * 60)
+
+    ratio_df = evaluate_split_ratios(X, y)
+    seed_df = evaluate_split_seeds(X, y)
+
+    ensure_dirs()
+    ratio_path = RESULTS_DIR / "split_ratio_metrics.csv"
+    seed_path = RESULTS_DIR / "split_seed_metrics.csv"
+    ratio_df.to_csv(ratio_path, index=False)
+    seed_df.to_csv(seed_path, index=False)
+
+    plot_split_ratio_comparison(ratio_df)
+    plot_split_seed_comparison(seed_df)
+
+    logger.info("Holdout metrics by train/test ratio:\n%s", ratio_df.to_string(index=False))
+    logger.info("Holdout metrics by 80/20 seed:\n%s", seed_df.to_string(index=False))
+
+    lr_ratios = ratio_df[ratio_df["Model"] == "Linear Regression"]["Test_R2"]
+    logger.info(
+        "Linear Regression Test R2 across ratios: min=%.3f max=%.3f (spread=%.3f). "
+        "Main split stays 80/20; CV mean+/-std remains the more stable estimate.",
+        float(lr_ratios.min()),
+        float(lr_ratios.max()),
+        float(lr_ratios.max() - lr_ratios.min()),
+    )
+    logger.info("Saved tables: %s | %s", ratio_path, seed_path)
+    return {
+        "ratios": ratio_df,
+        "seeds": seed_df,
+        "ratio_csv": ratio_path,
+        "seed_csv": seed_path,
+    }
 
 
 def plot_model_comparison(
@@ -487,12 +677,14 @@ def run_full_pipeline() -> dict[str, Any]:
     plot_model_comparison(metrics_df)
     plot_feature_importance(fitted, list(X.columns))
     clustered = run_clustering(X, y, meta)
+    split_sensitivity = run_split_sensitivity(X, y)
     return {
         "metrics": metrics_df,
         "cv_metrics": cv_df,
         "models": fitted,
         "split": split,
         "clusters": clustered,
+        "split_sensitivity": split_sensitivity,
     }
 
 

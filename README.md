@@ -44,6 +44,8 @@ money-vs-happiness-ml/
 │   ├── model_metrics.csv
 │   ├── predictor_correlations.csv
 │   ├── predictor_vif.csv
+│   ├── split_ratio_metrics.csv
+│   ├── split_seed_metrics.csv
 │   └── plots/
 ├── dashboard.py            # Streamlit interaktivni dashboard
 ├── run_pipeline.py         # glavni entry point
@@ -58,7 +60,7 @@ money-vs-happiness-ml/
 
 1. **Priprema** (`data_loader.py`) — učitavanje CSV-a, odabir feature/target kolona. Imputacija odvojena za EDA (cijeli skup) i ML (Pipeline na train).
 2. **EDA** (`eda.py`) — deskriptivna statistika, distribucija sreće, korelaciona matrica, **međusobne korelacije 6 faktora + VIF** (nijedna kolona nije izbačena), scatter GDP vs Happiness (linear + kvadratni fit).
-3. **Modelovanje** (`model.py`) — `sklearn.Pipeline` sa `SimpleImputer` + regressor; 5-fold cross-validation; 80/20 holdout test; GridSearch za RF/XGBoost.
+3. **Modelovanje** (`model.py`) — `sklearn.Pipeline` sa `SimpleImputer` + regressor; 5-fold cross-validation; glavni holdout **80/20**; dodatna provjera **90/10, 70/30, 60/40** i više seedova; GridSearch za RF/XGBoost.
 4. **Evaluacija** — R², MAE, RMSE (CV mean ± std + test set).
 5. **Interpretacija** — feature importance (RF / XGBoost) + K-Means klasteri sa elbow/silhouette analizom.
 
@@ -107,9 +109,11 @@ Sažetak nalaza: [`results_summary.md`](results_summary.md)
 Nakon pokretanja, rezultati se nalaze u:
 
 - `results/model_metrics.csv` — CV i test metrike po modelu
+- `results/split_ratio_metrics.csv` — Test metrike za 90/10, 80/20, 70/30, 60/40
+- `results/split_seed_metrics.csv` — isti 80/20, različiti random_state
 - `results/predictor_correlations.csv` — međusobne Pearson korelacije 6 faktora
 - `results/predictor_vif.csv` — VIF (provjera da li izbaciti kolonu)
-- `results/plots/` — grafikoni (distribucija, heatmap, prediktori, GDP–sreća, model comparison, feature importance, K-Means elbow, klasteri)
+- `results/plots/` — grafikoni (distribucija, heatmap, prediktori, GDP–sreća, split usporedba, model comparison, feature importance, K-Means elbow, klasteri)
 
 Pokreni `python run_pipeline.py` da regenerišeš metrike i grafikone.
 
@@ -125,6 +129,10 @@ Pokreni `python run_pipeline.py` da regenerišeš metrike i grafikone.
 | Generosity | 0.04 |
 
 GDP samostalno objašnjava ≈61% varijanse sreće (R² ≈ 0.615).
+
+### Holdout splitovi
+
+Glavni holdout je **80/20**. Ista tri modela su trenirana i na **90/10, 70/30 i 60/40** te na više 80/20 seedova. Test R² skače (LR od 0.62 do 0.85) jer je uzorak mali — 70/30 nije “bolji model”, samo drugi test skup. Zato se rangira po 5-fold CV.
 
 ### Međusobne korelacije 6 faktora (da li izbaciti kolonu?)
 

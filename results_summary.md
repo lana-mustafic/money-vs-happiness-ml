@@ -19,6 +19,17 @@ Sažetak nalaza iz World Happiness Report 2023 analize (Easterlin paradox + ML).
 - Na ovom malom cross-section uzorku (137 zemalja) jednostavniji model nadmašuje RF i XGBoost
 - GridSearch tuning poboljšao je RF/XGBoost u odnosu na fiksne hiperparametre
 
+**Više train/test podjela** (isti modeli, fiksni hiperparametri) — `split_ratio_metrics.csv`:
+
+| Split | n_test | LR Test R² | RF Test R² | XGB Test R² |
+|-------|--------|------------|------------|-------------|
+| 90/10 | 14 | 0.623 | 0.493 | 0.581 |
+| **80/20** | **28** | **0.780** | 0.729 | 0.675 |
+| 70/30 | 42 | 0.850 | 0.770 | 0.725 |
+| 60/40 | 55 | 0.823 | 0.755 | 0.731 |
+
+70/30 *izgleda* bolje, ali to je sreća test skupa, ne bolji model. Isti 80/20 sa drugim seedom daje LR R² od 0.62 do 0.82. Zato ostaje 80/20 + 5-fold CV.
+
 ### 2. Najvažniji Prediktori Sreće
 
 **Feature importance** (Random Forest / XGBoost) i **koeficijenti** linearne regresije:
@@ -75,6 +86,7 @@ Za k=3 (alternativa, manji silhouette) dobijaju se profile ≈ 4.3 / 5.8 / 7.0.
 - **SimpleImputer** unutar `sklearn.Pipeline` — imputacija fitovana samo na train fold (nema leakage)
 - **5-fold cross-validation** — pouzdanije metrike na malom uzorku
 - **GridSearchCV** — hyperparameter tuning za Random Forest i XGBoost
+- **Split osjetljivost** — 90/10, 80/20, 70/30, 60/40 + više 80/20 seedova
 - **Elbow + silhouette** — objektivan odabir broja klastera
 - **Logging** umjesto print — strukturiran output u pipeline-u
 - **Unit testovi** — `pytest tests/ -v`
@@ -88,12 +100,15 @@ Svi grafikoni su u `results/plots/`:
 - `predictor_correlation_heatmap.png`
 - `gdp_vs_happiness.png`
 - `model_comparison.png`
+- `split_ratio_comparison.png`
+- `split_seed_comparison.png`
 - `feature_importance.png`
 - `kmeans_elbow.png`
 - `kmeans_clusters.png`
 
 Metrike: `results/model_metrics.csv`  
-Korelacije prediktora: `results/predictor_correlations.csv`, `results/predictor_vif.csv`
+Korelacije prediktora: `results/predictor_correlations.csv`, `results/predictor_vif.csv`  
+Train/test splitovi: `results/split_ratio_metrics.csv`, `results/split_seed_metrics.csv`
 
 ## Interaktivni Dashboard
 

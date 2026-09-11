@@ -140,6 +140,32 @@ def main() -> None:
         "Detaljniji ML rezultati: `results_summary.md` i `results/plots/`."
     )
 
+    split_csv = ROOT / "results" / "split_ratio_metrics.csv"
+    if split_csv.exists():
+        st.subheader("Robustnost train/test splita")
+        split_df = pd.read_csv(split_csv)
+        fig_split = px.line(
+            split_df,
+            x="Train %",
+            y="Test_R2",
+            color="Model",
+            markers=True,
+            title="Test R² za 90/10, 80/20, 70/30 i 60/40",
+            hover_data=["Split", "n_train", "n_test", "Test_MAE"],
+        )
+        fig_split.update_xaxes(autorange="reversed", title="Train udio (%)")
+        st.plotly_chart(fig_split, use_container_width=True)
+        st.dataframe(
+            split_df[["Split", "n_train", "n_test", "Model", "Test_R2", "Test_MAE"]].round(3),
+            hide_index=True,
+            use_container_width=True,
+        )
+        st.caption(
+            "Glavni izvještaj ostaje 80/20 (random_state=42). Veći Test R² na 70/30 ne znači "
+            "bolji model — drugi test skup može biti 'lakši'. 90/10 (samo 14 zemalja) je najnestabilniji. "
+            "Zato se u projektu više vjeruje 5-fold CV-u nego jednom holdoutu."
+        )
+
 
 if __name__ == "__main__":
     main()

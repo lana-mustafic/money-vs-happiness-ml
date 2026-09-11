@@ -702,6 +702,57 @@ Sa samo 137 zemalja, jedan slučajni 80/20 split može dati varijabilne rezultat
 - Imputacija je unutar `sklearn.Pipeline`, fitovana unutar svakog CV fold-a na trening fold-u.
 - Test skup se ne koristi za imputaciju, tuning niti treniranje finalnih procjena prije evaluacije.
 
+### 13.4 Osjetljivost na način podjele (90/10, 80/20, 70/30, 60/40)
+
+Profesorski zahtjev: ispitati **više podjela**, ne samo 80/20, da se vidi da li se model poboljša ili pokvari.
+
+**Implementacija:** `run_split_sensitivity()` u `src/model.py`. Ista tri modela (fiksni hiperparametri, bez ponovnog GridSearch-a) treniraju se na:
+
+1. **Četiri omjera** (`random_state=42`): 90/10, 80/20, 70/30, 60/40
+2. **Četiri shuffle-a** istog 80/20 omjera: `random_state` ∈ {0, 7, 42, 123}
+
+Glavni izvještaj i tabele u Sekciji 17 **ostaju 80/20, seed 42**. Ova sekcija je provjera robustnosti.
+
+**Grafikoni:** `results/plots/split_ratio_comparison.png`, `results/plots/split_seed_comparison.png`
+
+**Tabele:** `results/split_ratio_metrics.csv`, `results/split_seed_metrics.csv`
+
+**Test R² po omjeru (seed = 42):**
+
+
+| Split | n_train | n_test | Linear Regression | Random Forest | XGBoost |
+| ----- | ------- | ------ | ----------------- | ------------- | ------- |
+| 90/10 | 123     | 14     | 0.623             | 0.493         | 0.581   |
+| **80/20** | **109** | **28** | **0.780**     | 0.729         | 0.675   |
+| 70/30 | 95      | 42     | 0.850             | 0.770         | 0.725   |
+| 60/40 | 82      | 55     | 0.823             | 0.755         | 0.731   |
+
+
+**Test R² za isti 80/20 omjer, različiti shuffle:**
+
+
+| random_state | Linear Regression | Random Forest | XGBoost |
+| ------------ | ----------------- | ------------- | ------- |
+| 0            | 0.619             | 0.635         | 0.607   |
+| 7            | 0.741             | 0.749         | 0.737   |
+| **42** (glavni) | **0.780**      | 0.729         | 0.675   |
+| 123          | 0.822             | 0.839         | 0.798   |
+
+
+**Šta ovo znači:**
+
+- **70/30 izgleda “bolje” (LR R² = 0.850) nego 80/20 (0.780).** To **nije** dokaz da je 70/30 bolji protokol. Drugi test skup može biti lakši (sreća u tome koje su zemlje upale u test).
+- **90/10 je najgori i najnestabilniji** (samo 14 test zemalja). Više trening podataka ovdje nije pomoglo jer je test premalen da bi R² bio pouzdan.
+- Isti 80/20 omjer, drugi seed: LR Test R² ide od **0.619 do 0.822**. Seed 42 (0.780) je u sredini–gornjem dijelu raspona, nije ekstremno sretan split.
+- Rang modela **nije fiksan** na jednom holdoutu: na seed 0 i 7 Random Forest blago nadmašuje LR; na seed 42 LR pobjeđuje. Zato projekat rangira modele po **5-fold CV** (LR 0.779 ± 0.038), ne po jednom test skupu.
+- Linearna regresija na 80/20 seed 42 ima **isti** Test R² kao u glavnoj tabeli (0.780), jer LR nema GridSearch. RF/XGBoost u ovoj tabeli koriste **fiksne** hiperparametre da se porede splitovi, ne tuning.
+
+**Odluka:** zadržava se **80/20, random_state=42** kao standardni holdout. Dodatni omjeri ne poboljšavaju model na sistematski način; pokazuju da je holdout na 137 zemalja bučan.
+
+**Figure 5b – Test metrike po train/test omjeru**
+
+**Figure 5c – Isti 80/20 split, različiti random_state**
+
 ---
 
 ## 14. Metodologija mašinskog učenja
@@ -711,7 +762,7 @@ Sa samo 137 zemalja, jedan slučajni 80/20 split može dati varijabilne rezultat
 ```
 WHR2023.csv
   → load_for_modeling()
-  → train_test_split (80/20, random_state=42)
+  → train_test_split (80/20, random_state=42) + dodatna split-osjetljivost (90/10, 70/30, 60/40; više seedova)
   → za svaki model:
       → 5-fold CV (Pipeline + SimpleImputer + model)
       → GridSearchCV na train (RF, XGBoost; LR bez tuninga)
@@ -854,6 +905,8 @@ Izvor: `results/model_metrics.csv`
 
 **Figure 5 – Poređenje modela (CV metrike)** — `results/plots/model_comparison.png`
 
+Napomena: 80/20 je jedan holdout. Sekcija 13.4 pokazuje da Test R² zavisi od omjera i seeda; CV ostaje pouzdanija mjera.
+
 ---
 
 ## 18. Poređenje modela
@@ -873,7 +926,7 @@ Mogući razlozi, u skladu sa stvarnim rezultatima:
 
 ### 18.3 Da li je razlika substantijalna?
 
-Razlika u test R² između LR (0.780) i XGBoost (0.751) je ~~0.03, što je umjerena na ovom uzorku. Razlika u MAE (~~0.02 poena) je mala u odnosu na skalu happiness score-a.
+Razlika u test R² između LR (0.780) i XGBoost (0.751) je ~~0.03, što je umjerena na ovom uzorku. Razlika u MAE (~~0.02 poena) je mala u odnosu na skalu happiness score-a. Na nekim 80/20 seedovima Random Forest čak nadmašuje LR — još jedan razlog da se ne donosi zaključak iz jednog splita.
 
 ### 18.4 Preporučeni finalni model
 
@@ -1110,6 +1163,7 @@ Dashboard **NE integriše** trenirane ML modele za predikciju. Prikazuje **stvar
 5. **Tabele:** Top 10 i Bottom 10 zemalja po sreći.
 6. **Bar chart:** Pearson korelacije faktora sa happiness score-om.
 7. **Heatmap + tabela:** Pearson korelacije među 6 prediktora (provjera da li izbaciti kolonu).
+8. **Split robustnost:** Test R² za 90/10, 80/20, 70/30 i 60/40 (`split_ratio_metrics.csv`).
 
 ### 24.5 Pokretanje
 
@@ -1143,6 +1197,8 @@ money-vs-happiness-ml/
 │   ├── model_metrics.csv
 │   ├── predictor_correlations.csv
 │   ├── predictor_vif.csv
+│   ├── split_ratio_metrics.csv
+│   ├── split_seed_metrics.csv
 │   └── plots/                   # generisani grafikoni
 ├── dashboard.py                 # Streamlit app
 ├── run_pipeline.py              # glavni entry point
@@ -1171,7 +1227,8 @@ money-vs-happiness-ml/
       ├──► [model.py] ──► Pipeline → CV → GridSearch → test evaluacija
       │                      │
       │                      ├──► model_metrics.csv
-      │                      ├──► model_comparison.png
+      │                      ├──► split_ratio_metrics.csv, split_seed_metrics.csv
+      │                      ├──► model_comparison.png, split_ratio_comparison.png
       │                      ├──► feature_importance.png
       │                      └──► kmeans_elbow.png, kmeans_clusters.png
       │
@@ -1185,7 +1242,7 @@ money-vs-happiness-ml/
 | ------------------- | --------------------------------------------------- |
 | `data_loader.py`    | Učitavanje CSV, odabir kolona, imputacija (EDA put) |
 | `eda.py`            | Statistike, korelacije, redundantnost prediktora, scatter, boxplotovi |
-| `model.py`          | Treniranje, evaluacija, feature importance, K-Means |
+| `model.py`          | Treniranje, CV, split-osjetljivost, feature importance, K-Means |
 | `logging_config.py` | Strukturirani log output                            |
 | `run_pipeline.py`   | Orkestracija EDA + ML                               |
 | `dashboard.py`      | Korisnički interfejs za istraživanje podataka       |
@@ -1240,14 +1297,14 @@ jupyter notebook notebooks/analysis.ipynb
 | --------------------- | -------------------------------------------------------- |
 | `test_data_loader.py` | Učitavanje, kolone, imputacija, rename Ladder score      |
 | `test_eda.py`         | Parovi prediktora, prag \|r\| ≥ 0.8, odluka da se ne izbacuje kolona |
-| `test_model.py`       | Pipeline struktura, CV, train/evaluate, imputer na train |
+| `test_model.py`       | Pipeline, CV, train/evaluate, imputer na train, više train/test omjera |
 
 
 ---
 
 ## 27. Ograničenja
 
-1. **Mali uzorak** — 137 zemalja; visoka varijabilnost metrika.
+1. **Mali uzorak** — 137 zemalja; visoka varijabilnost metrika. Holdout Test R² za LR ide od 0.62 do 0.85 zavisno od splita (Sekcija 13.4).
 2. **Cross-section** — jedna godina; nema panela kroz vrijeme.
 3. **Easterlin paradox** — nije pravilno testiran bez vremenske dimenzije.
 4. **Nekorišteni World Bank podaci** — raw fajlovi postoje, ali nisu integrisani.
@@ -1388,6 +1445,8 @@ Projekat pokazuje da mašinsko učenje može kvantitativno opisati odnos bogatst
 | Figure 3 | `feature_boxplots.png`               | Boxplotovi karakteristika                             |
 | Figure 4 | `gdp_vs_happiness.png`       | GDP vs sreća sa linearnim i kvadratnim fitom |
 | Figure 5 | `model_comparison.png`       | Poređenje modela (CV metrike)                |
+| Figure 5b | `split_ratio_comparison.png` | Test R²/MAE za 90/10, 80/20, 70/30, 60/40 |
+| Figure 5c | `split_seed_comparison.png`  | Isti 80/20 split, različiti random_state   |
 | Figure 6 | `feature_importance.png`     | Važnost karakteristika (RF, XGBoost)         |
 | Figure 7 | `kmeans_elbow.png`           | Elbow i silhouette analiza za K-Means        |
 | Figure 8 | `kmeans_clusters.png`        | Klasteri zemalja na GDP–Happiness scatteru   |

@@ -14,9 +14,6 @@ venv/
 .vscode/
 *.egg-info/
 
-# Large datasets
-data/raw/*.csv
-
 # Models
 models/*.pkl
 
